@@ -16,7 +16,7 @@ function toRealDom(vdom) {
 
     if (vdom.props) {
         Object.keys(vdom.props).forEach(key => {
-            $dom.setAttribute(key, vdom.props[key]);
+            setProps($dom, key, vdom.props[key]);
         });
     }
 
@@ -28,6 +28,10 @@ function toRealDom(vdom) {
     }
 
     return $dom;
+}
+
+function mount($parent, vNode) {
+    return $parent.appendChild(toRealDom(vNode));
 }
 
 function updateDom($parent, oldNode, newNode, index = 0) {
@@ -62,7 +66,7 @@ function updateDom($parent, oldNode, newNode, index = 0) {
         // 如果新节点没有属性，把旧的节点的属性清除掉
         if (newPropsKeys.length === 0) {
             oldPropsKeys.forEach(propKey => {
-                $currentDom.removeAttribute(propKey);
+                removeProp($currentDom, propKey, oldProps[propKey]);
             });
         } else {
             // 拿到所有的props，以此遍历，增加/删除/修改对应属性
@@ -70,11 +74,11 @@ function updateDom($parent, oldNode, newNode, index = 0) {
             allPropsKeys.forEach(propKey => {
                 // 属性被去除了
                 if (!newProps[propKey]) {
-                    return $currentDom.removeAttribute(propKey);
+                    return removeProp($currentDom, propKey, oldProps[propKey]);
                 }
                 // 属性改变了/增加了
                 if (newProps[propKey] !== oldProps[propKey]) {
-                    return $currentDom.setAttribute(propKey, newProps[propKey]);
+                    return setProps($currentDom, propKey, newProps[propKey]);
                 }
             });
         }
@@ -88,6 +92,50 @@ function updateDom($parent, oldNode, newNode, index = 0) {
         for (let i = 0; i < oldNode.children.length || i < newNode.children.length; i++) {
             updateDom($currentDom, oldNode.children[i], newNode.children[i], i);
         }
+    }
+}
+
+function isEventProp(name) {
+    return /^on/.test(name);
+}
+
+function extractEventName(name) {
+    return name.slice(2).toLowerCase();
+}
+
+function isCustomProp(name) {
+    return false;
+}
+
+function setProps($target, name, value) {
+    if (isCustomProp(name)) {
+        return;
+    } else if (name === 'className') { // fix react className
+        return $target.setAttribute('class', value);
+    } else if (isEventProp(name)) {
+        return $target.addEventListener(extractEventName(name), value);
+    } else if (typeof value === 'boolean') {
+        if (value) {
+            $target.setAttribute(name, value);
+        }
+        return $target[name] = value;
+    } else {
+        return $target.setAttribute(name, value);
+    }
+}
+
+function removeProp($target, name, value) {
+    if (isCustomProp(name)) {
+        return;
+    } else if (name === 'className') { // fix react className
+        return $target.removeAttribute('class');
+    } else if (isEventProp(name)) {
+        return $target.removeEventListener(extractEventName(name), value);
+    } else if (typeof value === 'boolean') {
+        $target.removeAttribute(name);
+        $target[name] = false;
+    } else {
+        $target.removeAttribute(name);
     }
 }
 
@@ -140,18 +188,20 @@ const app = document.getElementById('app');
 
 const oldNode = (
     <div>
-        <span class="old-node" data-node="old">old-node</span>
+        <span className="old-node" data-node="old" onClick={() => console.log('old-node')}>old-node</span>
+        <input disabled={true} />
     </div>
 );
 
 const newNode = (
     <div>
-        <span class="new-node" data-node="new">new-node</span>
+        <span className="new-node" data-node="new">new-node</span>
         <span>next-node</span>
     </div>
 );
 
-updateDom(app, null, oldNode); // 初始化挂载一个dom
+
+mount(app, oldNode); // 初始化挂载一个dom
 
 
 setTimeout(() => {
