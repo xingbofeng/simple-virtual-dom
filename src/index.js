@@ -70,7 +70,6 @@ function createKeyToOldIdx(children, beginIdx, endIdx) {
             }
         }
     }
-    console.log(children, beginIdx, endIdx, map);
     return map;
 }
 
@@ -89,13 +88,6 @@ function updateDom($parent, oldNode, newNode) {
     if (oldNode.type === 'textNode' && newNode.type === 'textNode' && oldNode.text === newNode.text) {
         return;
     }
-
-    // oldNode和newNode都有值，深入对比
-    // 根节点发生改变，则不是相同的vNode
-    // 直接replaceChild
-    // if (isNodeChanged(oldNode, newNode)) {
-    //     return $parent.replaceChild(toRealDom(newNode), oldNode.$el);
-    // }
 
     // 虚拟DOM的type未改变，对比节点的props是否改变
     // 对比props，进行替换vNode
@@ -144,7 +136,6 @@ function updateDom($parent, oldNode, newNode) {
         let oldKeyToIdx;
         let idxInOld;
         let elmToMove;
-        let before;
 
         while(oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
             if (!oldStartVnode) {
@@ -155,21 +146,26 @@ function updateDom($parent, oldNode, newNode) {
                 newStartVnode = newNode.children[++newStartIdx];
             } else if (!newEndVnode) {
                 newEndVnode = newNode.children[--newEndIdx];
-            } else if (sameVnode(oldStartVnode, newStartVnode)) { // 如果两个节点是同一个节点，则更新其子节点
+            } else if (sameVnode(oldStartVnode, newStartVnode)) {
+                // 如果两个头节点是同一个节点，则更新其子节点，继续向后遍历
                 updateDom(oldNode.$el, oldStartVnode, newStartVnode);
                 oldStartVnode = oldNode.children[++oldStartIdx];
                 newStartVnode = newNode.children[++newStartIdx];
             } else if (sameVnode(oldEndVnode, newEndVnode)) {
+                // 如果两个尾节点是同一个节点，则更新其子节点，继续向前遍历
                 updateDom(oldNode.$el, oldEndVnode, newEndVnode);
                 oldEndVnode = oldNode.children[--oldEndIdx];
                 newEndVnode = newNode.children[--newEndIdx];
             } else if (sameVnode(oldStartVnode, newEndVnode)) {
-                updateDom(oldNode.$el, oldStartVnode, newStartVnode);
+                // 如果旧的头节点和新的尾节点相同，可以通过移动节点来复用DOM
+                // 先继续更新子节点，然后把旧的头结点（即新的尾节点）加入到最后面
+                updateDom(oldNode.$el, oldStartVnode, newEndVnode);
                 oldNode.$el.insertBefore(oldStartVnode.$el, oldEndVnode.$el.nextSibling);
                 oldStartVnode = oldNode.children[++oldStartIdx];
                 newEndVnode = newNode.children[--newEndIdx];
             } else if (sameVnode(oldEndVnode, newStartVnode)) {
-                updateDom(oldNode.$el, oldStartVnode, newStartVnode);
+                // 原理同上
+                updateDom(oldNode.$el, oldEndVnode, newStartVnode);
                 oldNode.$el.insertBefore(oldEndVnode.$el, oldStartVnode.$el);
                 oldEndVnode = oldNode.children[--oldEndIdx];
                 newStartVnode = newNode.children[++newStartIdx];
@@ -182,20 +178,21 @@ function updateDom($parent, oldNode, newNode) {
                 idxInOld = oldKeyToIdx[newStartVnode.props['v-key']];
                 // 该节点是一个新的节点，则在旧节点前插入该节点
                 if (idxInOld === undefined) {
+                    // 这里创建一个新节点，表示新增加的
                     oldNode.$el.insertBefore(toRealDom(newStartVnode), oldStartVnode.$el);
                     newStartVnode = newNode.children[++newStartIdx];
-                } else { // 该节点是一个旧节点，则移动该节点
+                } else { // 该节点是一个旧节点，可以复用旧的DOM，则移动该节点
                     elmToMove = oldNode.children[idxInOld];
                     updateDom(oldNode.$el, elmToMove, newStartVnode);
                     // 然后将旧节点组中对应节点设置为undefined,代表已经遍历过了，不在遍历，否则可能存在重复插入的问题
                     oldNode.children[idxInOld] = undefined;
                     oldNode.$el.insertBefore(elmToMove.$el, oldStartVnode.$el);
+                    // 自增newStartIdx，继续遍历新节点
+                    newStartVnode = newNode.children[++newStartIdx];
                 }
-                // 自增newStartIdx，继续遍历新节点
-                newStartVnode = newNode.children[++newStartIdx];
             }
 
-            // 当旧头索引大于旧尾索引时，代表旧节点组已经遍历完，将剩余的新Vnode添加到最后一个新节点的位置后
+            // 当旧头索引大于旧尾索引时，代表旧节点组已经遍历完，将剩余的新节点添加到最后一个新节点的位置后
             if (oldStartIdx > oldEndIdx) {
                 for (let i = newStartIdx; i <= newEndIdx; i++) {
                     if (newNode.children[i]) {
@@ -203,6 +200,7 @@ function updateDom($parent, oldNode, newNode) {
                     }
                 }
             } else if (newStartIdx > newEndIdx) {
+                // 当新节点头索引大于新节点尾索引，表示新节点组已经遍历完了，直接删除旧的未遍历到的节点，这些节点不再需要
                 for (let i = oldStartIdx; i <= oldEndIdx; i++) {
                     if (oldNode.children[i]) {
                         oldNode.$el.removeChild(oldNode.children[i].$el);
@@ -210,10 +208,6 @@ function updateDom($parent, oldNode, newNode) {
                 }
             }
         }
-
-        // for (let i = 0; i < oldNode.children.length || i < newNode.children.length; i++) {
-        //     updateDom(oldNode.$el, oldNode.children[i], newNode.children[i]);
-        // }
     }
 }
 
@@ -350,8 +344,55 @@ setTimeout(() => {
      * 测试，颠倒oldNode的节点
      */
     
+    // updateDom(app, oldNode, {
+    //     ...oldNode,
+    //     children: [...oldNode.children].reverse(),
+    // });
+    
+    /**
+     * 测试，在oldNode前添加一个节点
+     */
+    
+    // updateDom(app, oldNode, {
+    //     ...oldNode,
+    //     children: [{
+    //         type: 'div',
+    //         props: { 'v-key': ++vKey },
+    //         children: [{
+    //             type: 'textNode',
+    //             text: 'test new node',
+    //             props: { 'v-key': ++vKey },
+    //             children: [],
+    //         }],
+    //     }, ...oldNode.children],
+    // });
+    
+    /**
+     * 测试，颠倒oldNode的节点，并添加2个节点
+     */
+    
     updateDom(app, oldNode, {
         ...oldNode,
-        children: [...oldNode.children].reverse(),
+        children: [{
+            type: 'div',
+            props: { 'v-key': ++vKey },
+            children: [{
+                type: 'textNode',
+                text: 'test new node',
+                props: { 'v-key': ++vKey },
+                children: [],
+            }],
+        }, ...oldNode.children, {
+            type: 'div',
+            props: { 'v-key': ++vKey },
+            children: [{
+                type: 'textNode',
+                text: 'test new node2',
+                props: { 'v-key': ++vKey },
+                children: [],
+            }],
+        }].reverse(),
     });
+
+
 }, 2000);
