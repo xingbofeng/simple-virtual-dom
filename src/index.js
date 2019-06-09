@@ -26,28 +26,28 @@ function sameVnode(vnode1, vnode2) {
   return vnode1.props['v-key'] === vnode2.props['v-key'];
 }
 
-function toRealDom(vdom) {
+function toRealDom(vNode) {
     let $dom;
-    if (vdom.type === 'textNode') {
-        $dom = document.createTextNode(vdom.text);
+    if (vNode.type === 'textNode') {
+        $dom = document.createTextNode(vNode.text);
     } else {
-        $dom = document.createElement(vdom.type);
+        $dom = document.createElement(vNode.type);
     }
 
-    if (vdom.props) {
-        Object.keys(vdom.props).forEach(key => {
-            vdom.type !== 'textNode' && setProps($dom, key, vdom.props[key]);
+    if (vNode.props) {
+        Object.keys(vNode.props).forEach(key => {
+            vNode.type !== 'textNode' && setProp($dom, key, vNode.props[key]);
         });
     }
 
-    if (vdom.children) {
-        vdom.children.forEach(childVdom => {
+    if (vNode.children) {
+        vNode.children.forEach(childVdom => {
             const realChildDom = toRealDom(childVdom);
             $dom.appendChild(realChildDom);
         });
     }
 
-    vdom.$el = $dom;
+    vNode.$el = $dom;
 
     return $dom;
 }
@@ -73,26 +73,26 @@ function createKeyToOldIdx(children, beginIdx, endIdx) {
     return map;
 }
 
-function updateDom($parent, oldNode, newNode) {
+function updateDom($parent, oldVNode, newVNode) {
     // 没有旧的节点，添加新的节点
-    if (!oldNode) {
-        return $parent.appendChild(toRealDom(newNode));
+    if (!oldVNode) {
+        return $parent.appendChild(toRealDom(newVNode));
     }
 
     // 没有新的节点，删除旧的节点
-    if (!newNode) {
-        return $parent.removeChild(oldNode.$el);
+    if (!newVNode) {
+        return $parent.removeChild(oldVNode.$el);
     }
 
     // 都是文本节点，都没有发生变化
-    if (oldNode.type === 'textNode' && newNode.type === 'textNode' && oldNode.text === newNode.text) {
+    if (oldVNode.type === 'textNode' && newVNode.type === 'textNode' && oldVNode.text === newVNode.text) {
         return;
     }
 
     // 虚拟DOM的type未改变，对比节点的props是否改变
     // 对比props，进行替换vNode
-    const oldProps = oldNode.props || {};
-    const newProps = newNode.props || {};
+    const oldProps = oldVNode.props || {};
+    const newProps = newVNode.props || {};
     if (isPropsChanged(oldProps, newProps)) {
         const oldPropsKeys = Object.keys(oldProps);
         const newPropsKeys = Object.keys(newProps);
@@ -100,7 +100,7 @@ function updateDom($parent, oldNode, newNode) {
         // 如果新节点没有属性，把旧的节点的属性清除掉
         if (newPropsKeys.length === 0) {
             oldPropsKeys.forEach(propKey => {
-                removeProp(oldNode.$el, propKey, oldProps[propKey]);
+                removeProp(oldVNode.$el, propKey, oldProps[propKey]);
             });
         } else {
             // 拿到所有的props，以此遍历，增加/删除/修改对应属性
@@ -108,11 +108,11 @@ function updateDom($parent, oldNode, newNode) {
             allPropsKeys.forEach(propKey => {
                 // 属性被去除了
                 if (!newProps[propKey]) {
-                    return removeProp(oldNode.$el, propKey, oldProps[propKey]);
+                    return removeProp(oldVNode.$el, propKey, oldProps[propKey]);
                 }
                 // 属性改变了/增加了
-                if (newProps[propKey] !== oldProps[propKey] && oldNode.type !== 'textNode') {
-                    return setProps(oldNode.$el, propKey, newProps[propKey]);
+                if (newProps[propKey] !== oldProps[propKey] && oldVNode.type !== 'textNode') {
+                    return setProp(oldVNode.$el, propKey, newProps[propKey]);
                 }
             });
         }
@@ -120,18 +120,18 @@ function updateDom($parent, oldNode, newNode) {
 
     // 根节点相同，但子节点不同，要递归对比子节点
     if (
-        (oldNode.children && oldNode.children.length) ||
-        (newNode.children && newNode.children.length)
+        (oldVNode.children && oldVNode.children.length) ||
+        (newVNode.children && newVNode.children.length)
     ) {
         let oldStartIdx = 0;
-        let oldEndIdx = oldNode.children.length - 1;
-        let oldStartVnode = oldNode.children[oldStartIdx];
-        let oldEndVnode = oldNode.children[oldEndIdx];
+        let oldEndIdx = oldVNode.children.length - 1;
+        let oldStartVnode = oldVNode.children[oldStartIdx];
+        let oldEndVnode = oldVNode.children[oldEndIdx];
         
         let newStartIdx = 0;
-        let newEndIdx = newNode.children.length - 1;
-        let newStartVnode = newNode.children[newStartIdx];
-        let newEndVnode = newNode.children[newEndIdx];
+        let newEndIdx = newVNode.children.length - 1;
+        let newStartVnode = newVNode.children[newStartIdx];
+        let newEndVnode = newVNode.children[newEndIdx];
 
         let oldKeyToIdx;
         let idxInOld;
@@ -139,71 +139,71 @@ function updateDom($parent, oldNode, newNode) {
 
         while(oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
             if (!oldStartVnode) {
-                oldStartVnode = oldNode.children[++oldStartIdx];
+                oldStartVnode = oldVNode.children[++oldStartIdx];
             } else if (!oldEndVnode) {
-                oldEndVnode = oldNode.children[--oldEndIdx];
+                oldEndVnode = oldVNode.children[--oldEndIdx];
             } else if (!newStartVnode) {
-                newStartVnode = newNode.children[++newStartIdx];
+                newStartVnode = newVNode.children[++newStartIdx];
             } else if (!newEndVnode) {
-                newEndVnode = newNode.children[--newEndIdx];
+                newEndVnode = newVNode.children[--newEndIdx];
             } else if (sameVnode(oldStartVnode, newStartVnode)) {
                 // 如果两个头节点是同一个节点，则更新其子节点，继续向后遍历
-                updateDom(oldNode.$el, oldStartVnode, newStartVnode);
-                oldStartVnode = oldNode.children[++oldStartIdx];
-                newStartVnode = newNode.children[++newStartIdx];
+                updateDom(oldVNode.$el, oldStartVnode, newStartVnode);
+                oldStartVnode = oldVNode.children[++oldStartIdx];
+                newStartVnode = newVNode.children[++newStartIdx];
             } else if (sameVnode(oldEndVnode, newEndVnode)) {
                 // 如果两个尾节点是同一个节点，则更新其子节点，继续向前遍历
-                updateDom(oldNode.$el, oldEndVnode, newEndVnode);
-                oldEndVnode = oldNode.children[--oldEndIdx];
-                newEndVnode = newNode.children[--newEndIdx];
+                updateDom(oldVNode.$el, oldEndVnode, newEndVnode);
+                oldEndVnode = oldVNode.children[--oldEndIdx];
+                newEndVnode = newVNode.children[--newEndIdx];
             } else if (sameVnode(oldStartVnode, newEndVnode)) {
                 // 如果旧的头节点和新的尾节点相同，可以通过移动节点来复用DOM
                 // 先继续更新子节点，然后把旧的头结点（即新的尾节点）加入到最后面
-                updateDom(oldNode.$el, oldStartVnode, newEndVnode);
-                oldNode.$el.insertBefore(oldStartVnode.$el, oldEndVnode.$el.nextSibling);
-                oldStartVnode = oldNode.children[++oldStartIdx];
-                newEndVnode = newNode.children[--newEndIdx];
+                updateDom(oldVNode.$el, oldStartVnode, newEndVnode);
+                oldVNode.$el.insertBefore(oldStartVnode.$el, oldEndVnode.$el.nextSibling);
+                oldStartVnode = oldVNode.children[++oldStartIdx];
+                newEndVnode = newVNode.children[--newEndIdx];
             } else if (sameVnode(oldEndVnode, newStartVnode)) {
                 // 原理同上
-                updateDom(oldNode.$el, oldEndVnode, newStartVnode);
-                oldNode.$el.insertBefore(oldEndVnode.$el, oldStartVnode.$el);
-                oldEndVnode = oldNode.children[--oldEndIdx];
-                newStartVnode = newNode.children[++newStartIdx];
+                updateDom(oldVNode.$el, oldEndVnode, newStartVnode);
+                oldVNode.$el.insertBefore(oldEndVnode.$el, oldStartVnode.$el);
+                oldEndVnode = oldVNode.children[--oldEndIdx];
+                newStartVnode = newVNode.children[++newStartIdx];
             } else {
                 // 如果不存在旧节点的key-index表，则创建
                 if (oldKeyToIdx === undefined) {
-                    oldKeyToIdx = createKeyToOldIdx(oldNode.children, oldStartIdx, oldEndIdx);
+                    oldKeyToIdx = createKeyToOldIdx(oldVNode.children, oldStartIdx, oldEndIdx);
                 }
                 // 找到新节点在旧节点组中对应节点的位置
                 idxInOld = oldKeyToIdx[newStartVnode.props['v-key']];
                 // 该节点是一个新的节点，则在旧节点前插入该节点
                 if (idxInOld === undefined) {
                     // 这里创建一个新节点，表示新增加的
-                    oldNode.$el.insertBefore(toRealDom(newStartVnode), oldStartVnode.$el);
-                    newStartVnode = newNode.children[++newStartIdx];
+                    oldVNode.$el.insertBefore(toRealDom(newStartVnode), oldStartVnode.$el);
+                    newStartVnode = newVNode.children[++newStartIdx];
                 } else { // 该节点是一个旧节点，可以复用旧的DOM，则移动该节点
-                    elmToMove = oldNode.children[idxInOld];
-                    updateDom(oldNode.$el, elmToMove, newStartVnode);
+                    elmToMove = oldVNode.children[idxInOld];
+                    updateDom(oldVNode.$el, elmToMove, newStartVnode);
                     // 然后将旧节点组中对应节点设置为undefined,代表已经遍历过了，不在遍历，否则可能存在重复插入的问题
-                    oldNode.children[idxInOld] = undefined;
-                    oldNode.$el.insertBefore(elmToMove.$el, oldStartVnode.$el);
+                    oldVNode.children[idxInOld] = undefined;
+                    oldVNode.$el.insertBefore(elmToMove.$el, oldStartVnode.$el);
                     // 自增newStartIdx，继续遍历新节点
-                    newStartVnode = newNode.children[++newStartIdx];
+                    newStartVnode = newVNode.children[++newStartIdx];
                 }
             }
 
             // 当旧头索引大于旧尾索引时，代表旧节点组已经遍历完，将剩余的新节点添加到最后一个新节点的位置后
             if (oldStartIdx > oldEndIdx) {
                 for (let i = newStartIdx; i <= newEndIdx; i++) {
-                    if (newNode.children[i]) {
-                        oldNode.$el.insertBefore(toRealDom(newNode.children[i]), newNode.children[newEndIdx + 1] ? newNode.children[newEndIdx + 1].$el : null);
+                    if (newVNode.children[i]) {
+                        oldVNode.$el.insertBefore(toRealDom(newVNode.children[i]), newVNode.children[newEndIdx + 1] ? newVNode.children[newEndIdx + 1].$el : null);
                     }
                 }
             } else if (newStartIdx > newEndIdx) {
                 // 当新节点头索引大于新节点尾索引，表示新节点组已经遍历完了，直接删除旧的未遍历到的节点，这些节点不再需要
                 for (let i = oldStartIdx; i <= oldEndIdx; i++) {
-                    if (oldNode.children[i]) {
-                        oldNode.$el.removeChild(oldNode.children[i].$el);
+                    if (oldVNode.children[i]) {
+                        oldVNode.$el.removeChild(oldVNode.children[i].$el);
                     }
                 }
             }
@@ -223,7 +223,7 @@ function isCustomProp(name) {
     return false;
 }
 
-function setProps($target, name, value) {
+function setProp($target, name, value) {
     if (isCustomProp(name)) {
         return;
     } else if (name === 'className') { // fix react className
@@ -255,20 +255,20 @@ function removeProp($target, name, value) {
     }
 }
 
-function isNodeChanged(oldNode, newNode) {
+function isNodeChanged(oldVNode, newVNode) {
     // 一个是textNode，一个是element，一定改变
-    if (typeof oldNode !== typeof newNode) {
+    if (typeof oldVNode !== typeof newVNode) {
         return true;
     }
 
     // 都是textNode，比较文本是否改变
-    if (oldNode.type === 'textNode' && newNode.type === 'textNode') {
-        return oldNode.text !== newNode.text;
+    if (oldVNode.type === 'textNode' && newVNode.type === 'textNode') {
+        return oldVNode.text !== newVNode.text;
     }
 
     // 都是element节点，比较节点类型是否改变
-    if (typeof oldNode === 'object' && typeof newNode === 'object') {
-        return oldNode.type !== newNode.type;
+    if (typeof oldVNode === 'object' && typeof newVNode === 'object') {
+        return oldVNode.type !== newVNode.type;
     }
 }
 
@@ -302,14 +302,14 @@ function isPropsChanged(oldProps, newProps) {
 
 const app = document.getElementById('app');
 
-const oldNode = (
+const oldVNode = (
     <div>
         <span className="old-node" data-node="old" onClick={() => console.log('old-node')}>old-node</span>
         <input disabled={true} />
     </div>
 );
 
-const newNode = (
+const newVNode = (
     <div>
         <span className="new-node" data-node="new">new-node</span>
         <span>next-node</span>
@@ -317,17 +317,17 @@ const newNode = (
 );
 
 
-mount(app, oldNode); // 初始化挂载一个dom
+mount(app, oldVNode); // 初始化挂载一个dom
 
 setTimeout(() => {
-    // updateDom(app, oldNode, newNode); // 更新dom
+    // updateDom(app, oldVNode, newVNode); // 更新dom
 
     /**
-     * 测试，在oldNode中添加一个节点
+     * 测试，在oldVNode中添加一个节点
      */
-    // updateDom(app, oldNode, {
-    //     ...oldNode,
-    //     children: [...oldNode.children, {
+    // updateDom(app, oldVNode, {
+    //     ...oldVNode,
+    //     children: [...oldVNode.children, {
     //         type: 'div',
     //         props: { 'v-key': ++vKey },
     //         children: [{
@@ -341,20 +341,20 @@ setTimeout(() => {
     
 
     /**
-     * 测试，颠倒oldNode的节点
+     * 测试，颠倒oldVNode的节点
      */
     
-    // updateDom(app, oldNode, {
-    //     ...oldNode,
-    //     children: [...oldNode.children].reverse(),
+    // updateDom(app, oldVNode, {
+    //     ...oldVNode,
+    //     children: [...oldVNode.children].reverse(),
     // });
     
     /**
-     * 测试，在oldNode前添加一个节点
+     * 测试，在oldVNode前添加一个节点
      */
     
-    // updateDom(app, oldNode, {
-    //     ...oldNode,
+    // updateDom(app, oldVNode, {
+    //     ...oldVNode,
     //     children: [{
     //         type: 'div',
     //         props: { 'v-key': ++vKey },
@@ -364,15 +364,15 @@ setTimeout(() => {
     //             props: { 'v-key': ++vKey },
     //             children: [],
     //         }],
-    //     }, ...oldNode.children],
+    //     }, ...oldVNode.children],
     // });
     
     /**
-     * 测试，颠倒oldNode的节点，并添加2个节点
+     * 测试，颠倒oldVNode的节点，并添加2个节点
      */
     
-    updateDom(app, oldNode, {
-        ...oldNode,
+    updateDom(app, oldVNode, {
+        ...oldVNode,
         children: [{
             type: 'div',
             props: { 'v-key': ++vKey },
@@ -382,7 +382,7 @@ setTimeout(() => {
                 props: { 'v-key': ++vKey },
                 children: [],
             }],
-        }, ...oldNode.children, {
+        }, ...oldVNode.children, {
             type: 'div',
             props: { 'v-key': ++vKey },
             children: [{

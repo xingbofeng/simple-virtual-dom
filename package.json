@@ -1,13 +1,13 @@
 {
-  "name": "virtual-dom",
+  "name": "simple-virtual-dom",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
     "dev": "webpack-dev-server --mode development --open",
     "build": "webpack --mode production"
   },
-  "author": "",
+  "author": "counterxing",
   "license": "ISC",
   "devDependencies": {
     "@babel/cli": "^7.4.4",
